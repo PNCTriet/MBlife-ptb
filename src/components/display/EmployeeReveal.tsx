@@ -18,17 +18,24 @@ import {
 import {
   clamp,
   cloneDefaultSharedLedLayout,
+  DEFAULT_TEXT_BOX_HEIGHT,
+  DEFAULT_TEXT_BOX_WIDTH,
   LED_SLOT_LABELS,
   loadSharedLedLayout,
   publishSharedLedLayout,
   saveSharedLedLayout,
   SHARED_LED_LAYOUT_EVENT,
+  slotHeightPct,
   type SharedLedLayout,
   type SharedLedSlot,
   type TextAlign,
 } from "@/lib/shared-led-layout";
 import type { Honorific } from "@/lib/types";
-import { LedRichTextEditor, LedTextToolbar } from "@/components/display/LedRichText";
+import {
+  LedRichTextEditor,
+  LedTextFitBox,
+  LedTextToolbar,
+} from "@/components/display/LedRichText";
 
 type Props = {
   name: string;
@@ -39,8 +46,16 @@ type Props = {
   onEditModeChange?: (editing: boolean) => void;
 };
 
+type InteractionMode =
+  | "drag"
+  | "resize"
+  | "resize-x"
+  | "resize-y"
+  | "text-drag"
+  | "text-resize";
+
 type Interaction = {
-  mode: "drag" | "resize" | "text-drag";
+  mode: InteractionMode;
   id: LedId;
   pointerId: number;
   startX: number;
@@ -117,12 +132,25 @@ export default function EmployeeReveal({
     [shownDays, shownName, shownTitle, shownWish]
   );
 
+  // Deferred one frame: localStorage is client-only, so reading it during the
+  // hydrating render would mismatch the server output.
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       setLayout(loadSharedLedLayout());
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  // Auto-persist shortly after edits so reload keeps the last arrangement.
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = window.setTimeout(() => {
+      if (saveSharedLedLayout(layout)) {
+        setDirty(false);
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [dirty, layout]);
 
   useEffect(() => {
     const onRemote = (event: Event) => {
@@ -232,7 +260,7 @@ export default function EmployeeReveal({
   }, []);
 
   const startInteraction = (
-    mode: Interaction["mode"],
+    mode: InteractionMode,
     id: LedId,
     event: ReactPointerEvent<HTMLElement>
   ) => {
@@ -259,6 +287,13 @@ export default function EmployeeReveal({
     const dx = ((event.clientX - interaction.startX) / rect.width) * 100;
     const dy = ((event.clientY - interaction.startY) / rect.height) * 100;
     const slot = interaction.initialSlot;
+    // Height at gesture start: the stage cannot resize mid-drag, so deriving
+    // it from the snapshot slot matches the on-screen frame.
+    const frameHeight = slotHeightPct(
+      slot,
+      LED_ASPECT_BY_ID[interaction.id],
+      rect
+    );
 
     if (interaction.mode === "drag") {
       updateSlot(interaction.id, {
@@ -269,13 +304,11 @@ export default function EmployeeReveal({
       return;
     }
 
+    // Text gestures work in frame-local %, so they stay put when the LED moves.
+    const localDx = slot.width > 0 ? (dx / slot.width) * 100 : 0;
+    const localDy = frameHeight > 0 ? (dy / frameHeight) * 100 : 0;
+
     if (interaction.mode === "text-drag") {
-      // Offset is % inside the LED frame; map stage delta → frame-local %.
-      const aspect = LED_ASPECT_BY_ID[interaction.id];
-      const frameW = interaction.initialSlot.width;
-      const frameH = (frameW / aspect) * (rect.width / rect.height);
-      const localDx = frameW > 0 ? (dx / frameW) * 100 : 0;
-      const localDy = frameH > 0 ? (dy / frameH) * 100 : 0;
       updateSlot(interaction.id, {
         ...slot,
         textOffsetX: clamp(slot.textOffsetX + localDx, 8, 92),
@@ -284,12 +317,33 @@ export default function EmployeeReveal({
       return;
     }
 
-    // Resize only affects THIS LED's width — LEDs can differ in size.
-    const width = clamp(slot.width + dx, 12, 200);
-    const scale = width / slot.width;
+    if (interaction.mode === "text-resize") {
+      // The box is centred on its anchor, so the dragged corner moves twice
+      // as fast as the box edge grows.
+      updateSlot(interaction.id, {
+        ...slot,
+        textWidth: clamp(slot.textWidth + localDx * 2, 10, 140),
+        textHeight: clamp(slot.textHeight + localDy * 2, 10, 140),
+      });
+      return;
+    }
+
+    const width =
+      interaction.mode === "resize-y"
+        ? slot.width
+        : clamp(slot.width + dx, 5, 200);
+    // The width-only handle keeps `height` as-is so an auto-aspect LED stays
+    // proportional; the other handles pin an explicit height.
+    const height =
+      interaction.mode === "resize-x"
+        ? slot.height
+        : clamp(frameHeight + dy, 2, 200);
+    const scale = slot.width > 0 ? width / slot.width : 1;
+
     updateSlot(interaction.id, {
       ...slot,
       width,
+      height,
       fontSize: clamp(slot.fontSize * scale, 0.8, 6),
     });
   };
@@ -300,9 +354,14 @@ export default function EmployeeReveal({
   };
 
   const handleSave = () => {
-    saveSharedLedLayout(layout);
-    setDirty(false);
-    setNotice("Đã lưu layout LED chung trên máy này");
+    if (saveSharedLedLayout(layout)) {
+      setDirty(false);
+      setNotice("Đã lưu layout LED chung trên máy này");
+    } else {
+      setNotice(
+        "Lưu không thành công — trình duyệt đang chặn lưu (tắt Private mode hoặc cho phép localStorage)"
+      );
+    }
   };
 
   const handleReset = () => {
@@ -340,6 +399,7 @@ export default function EmployeeReveal({
             LED_STRIPS.map((led) => {
               const item = layout.slots[led.id];
               const selected = editMode && selectedId === led.id;
+              const freeSized = item.height != null;
 
               return (
                 <motion.div
@@ -357,7 +417,11 @@ export default function EmployeeReveal({
                     left: `${item.x}%`,
                     top: `${item.y}%`,
                     width: `${item.width}%`,
-                    aspectRatio: `${led.nativeWidth} / ${led.nativeHeight}`,
+                    ...(freeSized
+                      ? { height: `${item.height}%` }
+                      : {
+                          aspectRatio: `${led.nativeWidth} / ${led.nativeHeight}`,
+                        }),
                   }}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -374,10 +438,20 @@ export default function EmployeeReveal({
                   onPointerCancel={endInteraction}
                 >
                   <div
-                    className="employee-led-text absolute z-[1] w-max max-w-[92%] px-[1%]"
+                    className={`employee-led-text absolute z-[1] ${
+                      editMode
+                        ? `outline-dashed outline-1 ${
+                            selected
+                              ? "outline-[#9fe8ff]/80"
+                              : "outline-white/25"
+                          }`
+                        : ""
+                    }`}
                     style={{
                       left: `${item.textOffsetX}%`,
                       top: `${item.textOffsetY}%`,
+                      width: `${item.textWidth}%`,
+                      height: `${item.textHeight}%`,
                       transform: "translate(-50%, -50%)",
                       color: item.color,
                     }}
@@ -393,54 +467,97 @@ export default function EmployeeReveal({
                     }}
                   >
                     {editMode && (
-                      <button
-                        type="button"
-                        data-text-drag
-                        aria-label="Kéo vị trí chữ"
-                        title="Kéo vị trí chữ trong ô"
-                        className="absolute -left-3 -top-3 z-[2] h-4 w-4 cursor-grab rounded-sm border border-black/40 bg-white/90 shadow active:cursor-grabbing"
-                        onPointerDown={(event) =>
-                          startInteraction("text-drag", led.id, event)
-                        }
-                        onPointerMove={moveInteraction}
-                        onPointerUp={endInteraction}
-                        onPointerCancel={endInteraction}
-                      />
+                      <>
+                        <button
+                          type="button"
+                          data-text-drag
+                          aria-label="Kéo vị trí chữ"
+                          title="Kéo vị trí khung chữ"
+                          className="absolute -left-3 -top-3 z-[2] h-4 w-4 cursor-grab rounded-sm border border-black/40 bg-white/90 shadow active:cursor-grabbing"
+                          onPointerDown={(event) =>
+                            startInteraction("text-drag", led.id, event)
+                          }
+                          onPointerMove={moveInteraction}
+                          onPointerUp={endInteraction}
+                          onPointerCancel={endInteraction}
+                        />
+                        <button
+                          type="button"
+                          data-text-resize
+                          aria-label="Đổi kích thước khung chữ"
+                          title="Kéo để đổi kích thước khung chữ"
+                          className="absolute -bottom-2.5 -right-2.5 z-[2] h-4 w-4 cursor-nwse-resize rounded-sm border border-black/40 bg-[#9fe8ff] shadow"
+                          onPointerDown={(event) =>
+                            startInteraction("text-resize", led.id, event)
+                          }
+                          onPointerMove={moveInteraction}
+                          onPointerUp={endInteraction}
+                          onPointerCancel={endInteraction}
+                        />
+                      </>
                     )}
-                    <LedRichTextEditor
-                      key={`${employeeKey}-${led.id}`}
-                      html={currentHtml[led.id]}
-                      editable={editMode}
-                      fontSizeVw={item.fontSize}
-                      onHtmlChange={(html) => {
-                        setHtmlOverride((current) => {
-                          const base =
-                            current && current.key === employeeKey
-                              ? current.map
-                              : liveHtml;
-                          return {
-                            key: employeeKey,
-                            map: { ...base, [led.id]: html },
-                          };
-                        });
-                        setDirty(true);
-                      }}
-                      onAlignChange={(align) => {
-                        updateSlot(led.id, { ...item, align });
-                      }}
-                    />
+                    <LedTextFitBox
+                      fitKey={`${currentHtml[led.id]}|${item.fontSize}|${item.textWidth}|${item.textHeight}`}
+                    >
+                      <LedRichTextEditor
+                        key={`${employeeKey}-${led.id}`}
+                        html={currentHtml[led.id]}
+                        editable={editMode}
+                        fontSizeVw={item.fontSize}
+                        onHtmlChange={(html) => {
+                          setHtmlOverride((current) => {
+                            const base =
+                              current && current.key === employeeKey
+                                ? current.map
+                                : liveHtml;
+                            return {
+                              key: employeeKey,
+                              map: { ...base, [led.id]: html },
+                            };
+                          });
+                          setDirty(true);
+                        }}
+                      />
+                    </LedTextFitBox>
                   </div>
 
                   {editMode && (
                     <>
                       <span className="absolute -top-6 left-0 whitespace-nowrap rounded bg-black/85 px-2 py-1 font-sans text-[10px] leading-none tracking-normal text-white">
-                        {LED_SLOT_LABELS[led.id]} · w{" "}
-                        {item.width.toFixed(1)}%
+                        {LED_SLOT_LABELS[led.id]} · w {item.width.toFixed(1)}%
+                        {freeSized
+                          ? ` · h ${item.height?.toFixed(1)}%`
+                          : " · h auto"}
                       </span>
                       <button
                         type="button"
-                        aria-label={`Resize ${EMPLOYEE_LED_LABELS[led.id]}`}
-                        className="absolute -bottom-2 -right-2 h-5 w-5 cursor-ew-resize rounded-sm border border-black/40 bg-[#f3cd62] shadow-lg"
+                        aria-label={`Đổi chiều rộng ${EMPLOYEE_LED_LABELS[led.id]}`}
+                        title="Kéo đổi chiều rộng (giữ tỉ lệ nếu chiều cao đang auto)"
+                        className="absolute -right-2 top-1/2 h-6 w-3.5 -translate-y-1/2 cursor-ew-resize rounded-sm border border-black/40 bg-[#f3cd62] shadow-lg"
+                        onPointerDown={(event) =>
+                          startInteraction("resize-x", led.id, event)
+                        }
+                        onPointerMove={moveInteraction}
+                        onPointerUp={endInteraction}
+                        onPointerCancel={endInteraction}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Đổi chiều cao ${EMPLOYEE_LED_LABELS[led.id]}`}
+                        title="Kéo đổi chiều cao"
+                        className="absolute -bottom-2 left-1/2 h-3.5 w-6 -translate-x-1/2 cursor-ns-resize rounded-sm border border-black/40 bg-[#f3cd62] shadow-lg"
+                        onPointerDown={(event) =>
+                          startInteraction("resize-y", led.id, event)
+                        }
+                        onPointerMove={moveInteraction}
+                        onPointerUp={endInteraction}
+                        onPointerCancel={endInteraction}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Đổi kích thước tự do ${EMPLOYEE_LED_LABELS[led.id]}`}
+                        title="Kéo đổi rộng + cao tự do"
+                        className="absolute -bottom-2.5 -right-2.5 h-5 w-5 cursor-nwse-resize rounded-sm border border-black/40 bg-[#f3cd62] shadow-lg"
                         onPointerDown={(event) =>
                           startInteraction("resize", led.id, event)
                         }
@@ -489,8 +606,8 @@ export default function EmployeeReveal({
                 Setup LED nhân viên
               </p>
               <p className="mt-1 text-xs text-white/45">
-                Kéo nền LED · click chữ để gõ · kéo góc đổi size riêng LED
-                này (đồng bộ với màn chờ theo cùng số LED)
+                Kéo nền LED · núm vàng đổi size nền (góc = tự do) · núm xanh
+                đổi khung chữ, chữ tự co theo khung
               </p>
               {visible && (
                 <p className="mt-2 rounded-lg border border-[#e8c96a]/30 bg-[#e8c96a]/10 px-2.5 py-1.5 text-[11px] leading-relaxed text-[#f3cd62]">
@@ -593,6 +710,41 @@ export default function EmployeeReveal({
               {EMPLOYEE_LED_LABELS[selectedId]}
             </strong>
           </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/45">
+            <span>
+              Nền {selectedSlot.width.toFixed(1)}% ×{" "}
+              {selectedSlot.height != null
+                ? `${selectedSlot.height.toFixed(1)}%`
+                : "auto"}{" "}
+              · khung chữ {selectedSlot.textWidth.toFixed(0)}% ×{" "}
+              {selectedSlot.textHeight.toFixed(0)}%
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                updateSlot(selectedId, { ...selectedSlot, height: null })
+              }
+              className="rounded-md border border-white/15 px-2.5 py-1.5 text-white/70 transition hover:bg-white/10 hover:text-white"
+            >
+              Cao tự động
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                updateSlot(selectedId, {
+                  ...selectedSlot,
+                  textWidth: DEFAULT_TEXT_BOX_WIDTH,
+                  textHeight: DEFAULT_TEXT_BOX_HEIGHT,
+                  textOffsetX: 50,
+                  textOffsetY: 50,
+                })
+              }
+              className="rounded-md border border-white/15 px-2.5 py-1.5 text-white/70 transition hover:bg-white/10 hover:text-white"
+            >
+              Reset khung chữ
+            </button>
+          </div>
 
           <LedTextToolbar
             fontSizeVw={selectedSlot.fontSize}

@@ -178,6 +178,8 @@ body {
   white-space: nowrap;
   width: max-content;
   max-width: none;
+  /* Auto margins centre the nowrap line inside the operator-sized text box. */
+  margin-inline: auto;
   background-image: linear-gradient(
     90deg,
     #ff8fa3,

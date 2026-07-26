@@ -8,7 +8,7 @@ export const LED_STRIPS = [
   {
     id: "led1",
     background: "/display/led-1.png",
-    video: "/video/led-1.mp4",
+    animation: "/video/led-1.gif",
     flare: "/display/led-1-flare.png",
     nativeWidth: 1024,
     nativeHeight: 146,
@@ -16,21 +16,21 @@ export const LED_STRIPS = [
   {
     id: "led2",
     background: "/display/led-2.png",
-    video: "/video/led-2.mp4",
+    animation: "/video/led-2.gif",
     nativeWidth: 1024,
     nativeHeight: 128,
   },
   {
     id: "led3",
     background: "/display/led-3.png",
-    video: "/video/led-3.mp4",
+    animation: "/video/led-3.gif",
     nativeWidth: 1024,
     nativeHeight: 205,
   },
   {
     id: "led4",
     background: "/display/led-4.png",
-    video: "/video/led-4.mp4",
+    animation: "/video/led-4.gif",
     nativeWidth: 1024,
     nativeHeight: 113,
   },

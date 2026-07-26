@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
@@ -14,7 +20,6 @@ type LedRichTextEditorProps = {
   fontSizeVw: number;
   className?: string;
   onHtmlChange?: (html: string) => void;
-  onAlignChange?: (align: "left" | "center" | "right") => void;
 };
 
 export function LedRichTextEditor({
@@ -23,8 +28,13 @@ export function LedRichTextEditor({
   fontSizeVw,
   className = "",
   onHtmlChange,
-  onAlignChange,
 }: LedRichTextEditorProps) {
+  const htmlRef = useRef(html);
+
+  useEffect(() => {
+    htmlRef.current = html;
+  }, [html]);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -52,13 +62,11 @@ export function LedRichTextEditor({
       },
     },
     onUpdate: ({ editor: current }) => {
-      onHtmlChange?.(current.getHTML());
-      const align = current.isActive({ textAlign: "left" })
-        ? "left"
-        : current.isActive({ textAlign: "right" })
-          ? "right"
-          : "center";
-      onAlignChange?.(align);
+      const nextHtml = current.getHTML();
+      // Skip no-op TipTap normalizations so parent layout isn't marked dirty.
+      if (nextHtml !== htmlRef.current) {
+        onHtmlChange?.(nextHtml);
+      }
     },
   });
 
@@ -83,6 +91,74 @@ export function LedRichTextEditor({
   if (!editor) return null;
 
   return <EditorContent editor={editor} />;
+}
+
+type LedTextFitBoxProps = {
+  /** Changes whenever content or size settings change — triggers a remeasure. */
+  fitKey: string;
+  className?: string;
+  children: ReactNode;
+};
+
+/**
+ * Scales the LED text down until it fits the operator-sized text box. The
+ * transform is layout-neutral, so measuring `scrollWidth`/`scrollHeight` of the
+ * untransformed content never feeds back into the observer.
+ */
+export function LedTextFitBox({
+  fitKey,
+  className = "",
+  children,
+}: LedTextFitBoxProps) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const content = contentRef.current;
+    if (!box || !content) return;
+
+    const measure = () => {
+      const boxWidth = box.clientWidth;
+      const boxHeight = box.clientHeight;
+      const contentWidth = content.scrollWidth;
+      const contentHeight = content.scrollHeight;
+      if (boxWidth <= 0 || boxHeight <= 0) return;
+      if (contentWidth <= 0 || contentHeight <= 0) return;
+
+      const next = Math.min(
+        1,
+        boxWidth / contentWidth,
+        boxHeight / contentHeight
+      );
+      setScale((current) =>
+        Math.abs(current - next) < 0.005 ? current : next
+      );
+    };
+
+    // ResizeObserver fires once on observe, which covers the initial measure
+    // without a synchronous setState inside the effect body.
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [fitKey]);
+
+  return (
+    <div
+      ref={boxRef}
+      className={`flex h-full w-full items-center justify-center overflow-visible ${className}`}
+    >
+      <div
+        ref={contentRef}
+        className="w-full"
+        style={{ transform: `scale(${scale})`, transformOrigin: "center" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 type LedTextToolbarProps = {

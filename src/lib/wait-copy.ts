@@ -45,6 +45,15 @@ export function loadWaitCopy(): WaitCopyMap {
   }
 }
 
-export function saveWaitCopy(copy: WaitCopyMap): void {
-  window.localStorage.setItem(WAIT_COPY_STORAGE_KEY, JSON.stringify(copy));
+export function saveWaitCopy(copy: WaitCopyMap): boolean {
+  if (typeof window === "undefined") return false;
+  if (!isWaitCopyMap(copy)) return false;
+
+  try {
+    const payload = JSON.stringify(copy);
+    window.localStorage.setItem(WAIT_COPY_STORAGE_KEY, payload);
+    return window.localStorage.getItem(WAIT_COPY_STORAGE_KEY) === payload;
+  } catch {
+    return false;
+  }
 }
