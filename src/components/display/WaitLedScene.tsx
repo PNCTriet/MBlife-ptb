@@ -70,9 +70,9 @@ type Interaction = {
  */
 const WAIT_FONT_SIZE_VW: Record<WaitLedId, number> = {
   led1: 3.76,
-  led2: 2.56,
+  led2: 3.76,
   led3: 3.76,
-  led4: 2.56,
+  led4: 3.76,
 };
 
 /** Soft glow dots over each LED strip — same layout on all 4. */
