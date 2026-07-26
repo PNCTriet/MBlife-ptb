@@ -39,7 +39,7 @@ import {
   LedTextFitBox,
   LedTextToolbar,
 } from "@/components/display/LedRichText";
-import { LedBackground } from "@/components/display/LedVideo";
+import { LedVideo } from "@/components/display/LedVideo";
 
 type Props = {
   visible: boolean;
@@ -381,8 +381,8 @@ export default function WaitLedScene({ visible, onEditModeChange }: Props) {
             >
               {/* Background only — clipped. Text is a sibling so it won't get crop-cut. */}
               <div className="wait-led pointer-events-none absolute inset-0 overflow-hidden !bg-black !p-0">
-                <LedBackground
-                  src={led.animation}
+                <LedVideo
+                  src={led.video}
                   poster={led.background}
                   className={`absolute inset-0 h-full w-full ${
                     freeSized ? "object-fill" : "object-cover"

@@ -19,15 +19,13 @@ const IDLE_STATE: LiveState = {
 
 export default function DisplayPage() {
   const [liveState, setLiveState] = useState<LiveState>(IDLE_STATE);
-  const [connected, setConnected] = useState(false);
-  const [editingLayout, setEditingLayout] = useState(false);
 
   const applyState = useCallback((row: LiveState) => {
     setLiveState(row);
   }, []);
 
   useEffect(() => {
-    return subscribeLiveState(applyState, setConnected);
+    return subscribeLiveState(applyState, () => {});
   }, [applyState]);
 
   const hasEmployee = Boolean(
@@ -42,10 +40,7 @@ export default function DisplayPage() {
       style={{} as CSSProperties}
     >
       {/* Physical set (logo / stairs / flares) shows through; software = LED only. */}
-      <WaitLedScene
-        visible={!hasEmployee}
-        onEditModeChange={setEditingLayout}
-      />
+      <WaitLedScene visible={!hasEmployee} />
 
       <EmployeeReveal
         name={liveState.employee_name ?? ""}
@@ -53,21 +48,7 @@ export default function DisplayPage() {
         title={liveState.title ?? "Chị"}
         wish={liveState.wish ?? ""}
         visible={hasEmployee}
-        onEditModeChange={setEditingLayout}
       />
-
-      <div
-        className={`absolute bottom-4 right-4 z-30 flex flex-col items-end gap-1 text-xs text-white/30 ${
-          editingLayout ? "hidden" : ""
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          <span
-            className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`}
-          />
-          {connected ? "Live" : "Đang kết nối..."}
-        </div>
-      </div>
     </main>
   );
 }
