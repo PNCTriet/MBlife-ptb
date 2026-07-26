@@ -1,0 +1,203 @@
+/* iPad UI — proportions from design artboard 1920×1080 */
+
+.ipad-screen {
+  --ipad-logo-w: 17.5vw;
+  --ipad-logo-top: 4.6vh;
+  --ipad-logo-right: 3.1vw;
+
+  /* Hero (welcome) tagline — large, centered */
+  --ipad-hero-tagline-w: 50vw;
+  --ipad-hero-tagline-top: 42vh;
+
+  /* Compact tagline (input / error / success) — small, pulled to the top
+     so it never crowds the box/message/button below it. */
+  --ipad-compact-tagline-w: 23.8vw;
+  --ipad-compact-tagline-max-w: 408px;
+  --ipad-compact-tagline-top: 12.4vh;
+
+  /* Fixed slots shared by input / error / success — identical on every
+     page so the box and button never jump between screens. */
+  --ipad-hint-top: 42vh;
+  --ipad-hint-h: 2.2vh;
+  --ipad-main-top: 45vh;
+  --ipad-main-min-h: 16vh;
+
+  /* Box (input / error) */
+  --ipad-box-w: 46vw;
+  --ipad-box-min-w: 360px;
+  --ipad-box-max-w: 880px;
+  --ipad-box-radius: 1.5vw;
+  --ipad-box-label-size: clamp(12px, 1vw, 15px);
+  --ipad-box-code-size: clamp(36px, 4.2vw, 64px);
+  --ipad-box-error-size: clamp(14px, 1.2vw, 18px);
+  --ipad-success-size: clamp(32px, 3.4vw, 50px);
+
+  /* Button — ALWAYS the same bottom anchor, on every single screen */
+  --ipad-btn-w: 22vw;
+  --ipad-btn-min-w: 200px;
+  --ipad-btn-max-w: 420px;
+  --ipad-btn-h: 6.2vh;
+  --ipad-btn-bottom: 15.5vh;
+  --ipad-btn-text: clamp(14px, 1.35vw, 20px);
+
+  /* Fullscreen toggle — mirrors the logo anchor on the opposite corner */
+  --ipad-fullscreen-size: clamp(38px, 3.4vw, 54px);
+}
+
+@media (max-aspect-ratio: 4/3) {
+  .ipad-screen {
+    --ipad-hero-tagline-w: 58vw;
+    --ipad-compact-tagline-w: 27.2vw;
+    --ipad-hint-top: 40vh;
+    --ipad-main-top: 43vh;
+    --ipad-box-w: 50vw;
+    --ipad-btn-w: 26vw;
+  }
+}
+
+@media (min-aspect-ratio: 16/9) {
+  .ipad-screen {
+    --ipad-hero-tagline-w: 50vw;
+    --ipad-compact-tagline-w: 21.25vw;
+    --ipad-hint-top: 43vh;
+    --ipad-main-top: 46vh;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   IpadScene — single layout used by ALL FOUR pages (welcome, input,
+   error, success). Every slot below is positioned with the exact same
+   class/variable regardless of which page renders it, so nothing can
+   drift between pages.
+   --------------------------------------------------------------------- */
+
+.ipad-fullscreen-btn {
+  position: absolute;
+  top: var(--ipad-logo-top);
+  left: var(--ipad-logo-right);
+  z-index: 30;
+  display: flex;
+  height: var(--ipad-fullscreen-size);
+  width: var(--ipad-fullscreen-size);
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background: rgb(10 8 30 / 0.42);
+  color: rgb(255 255 255 / 0.7);
+  backdrop-filter: blur(8px);
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.ipad-fullscreen-btn:hover {
+  border-color: rgb(0 212 255 / 0.55);
+  background: rgb(10 8 30 / 0.62);
+  color: #ffffff;
+}
+
+.ipad-fullscreen-btn:active {
+  transform: scale(0.94);
+}
+
+.ipad-fullscreen-btn svg {
+  height: 52%;
+  width: 52%;
+}
+
+.ipad-scene {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.ipad-scene-tagline {
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
+}
+
+.ipad-scene--hero .ipad-scene-tagline {
+  top: var(--ipad-hero-tagline-top);
+  transform: translate(-50%, -50%);
+}
+
+.ipad-scene--compact .ipad-scene-tagline {
+  top: var(--ipad-compact-tagline-top);
+}
+
+.ipad-scene-hint {
+  position: absolute;
+  top: var(--ipad-hint-top);
+  left: 50%;
+  z-index: 2;
+  height: var(--ipad-hint-h);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-weight: 400;
+  color: rgb(255 255 255 / 0.88);
+  font-size: var(--ipad-box-label-size);
+}
+
+.ipad-scene-hint--empty {
+  visibility: hidden;
+}
+
+.ipad-scene-main {
+  position: absolute;
+  top: var(--ipad-main-top);
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  min-height: var(--ipad-main-min-h);
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%);
+}
+
+.ipad-scene-main--message {
+  width: min(70vw, 860px);
+  text-align: center;
+  font-weight: 400;
+  color: rgb(255 255 255 / 0.92);
+  font-size: var(--ipad-success-size);
+}
+
+.ipad-scene-footer {
+  position: absolute;
+  bottom: var(--ipad-btn-bottom);
+  left: 50%;
+  z-index: 4;
+  transform: translateX(-50%);
+}
+
+.ipad-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: var(--ipad-box-w);
+  min-width: var(--ipad-box-min-w);
+  max-width: var(--ipad-box-max-w);
+  min-height: var(--ipad-main-min-h);
+  border-radius: var(--ipad-box-radius);
+  padding: 2.4vh 3.2vw 2.8vh;
+  text-align: center;
+}
+
+.ipad-box-error-text {
+  font-style: italic;
+  line-height: 1.65;
+  color: rgb(255 255 255 / 0.92);
+  font-size: var(--ipad-box-error-size);
+}
+
+.ipad-scene-main--message p {
+  background: linear-gradient(90deg, #7ee8ff 0%, #cdb3ff 50%, #f0a8ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

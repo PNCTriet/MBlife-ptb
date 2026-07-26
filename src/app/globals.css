@@ -1,0 +1,306 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050a14;
+  --foreground: #f5f5f5;
+  --gold: #c9a84c;
+  --gold-light: #e8c96a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.display-name {
+  font-family: var(--font-body), sans-serif;
+  font-weight: 700;
+  background: linear-gradient(180deg, #ffffff 0%, #ffe9a8 48%, #e0b850 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 42px rgba(212, 175, 55, 0.4));
+}
+
+/* VER 3 — LED bars on the physical wait set (PNG strip + text) */
+.wait-led {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35em 0.9em;
+  border-radius: 0.12em;
+  box-shadow: 0 0 28px rgb(0 0 0 / 0.35);
+}
+
+/* Prismatic flare overlay — a black-background PNG blended with `screen` so
+   only the colored light leaks show. Soft continuous breathe: never fully
+   off, never hard-cut — ease-in-out keeps the glow silky. */
+.wait-led-flare {
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  transform-origin: left center;
+  will-change: opacity, transform, filter;
+  animation: wait-led-flare-glow 4s ease-in-out infinite;
+}
+
+@keyframes wait-led-flare-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1) translateX(0);
+    filter: brightness(0.85) saturate(1) hue-rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03) translateX(0.35%);
+    filter: brightness(1.35) saturate(1.2) hue-rotate(6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wait-led-flare {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
+/* Subtle "chasing light" sweep over the LED background — a soft diagonal
+   streak that travels across the strip and loops, like a real LED chaser. */
+.wait-led-shine {
+  position: absolute;
+  top: 0;
+  left: -55%;
+  height: 100%;
+  width: 45%;
+  z-index: 2;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.14) 42%,
+    rgb(255 255 255 / 0.32) 50%,
+    rgb(255 255 255 / 0.14) 58%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+  /* Full cycle = 10s: quick sweep, then idle until the next loop. */
+  animation: wait-led-shine-sweep 10s linear infinite;
+  will-change: left;
+}
+
+@keyframes wait-led-shine-sweep {
+  0% {
+    left: -55%;
+  }
+  /* Sweep finishes in ~2s of the 10s cycle (20%), then holds off-screen. */
+  20% {
+    left: 145%;
+  }
+  100% {
+    left: 145%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wait-led-shine {
+    animation: none;
+    display: none;
+  }
+
+  .wait-led-particle {
+    animation: none;
+    opacity: 0.45;
+  }
+}
+
+/* Soft glowing particles — sparse sparkle over the LED PNG. */
+.wait-led-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wait-led-particle {
+  position: absolute;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgb(255 255 255 / 0.95) 0%,
+    rgb(255 255 255 / 0.35) 40%,
+    transparent 72%
+  );
+  box-shadow:
+    0 0 6px 1px rgb(255 255 255 / 0.55),
+    0 0 14px 3px rgb(255 240 200 / 0.25);
+  mix-blend-mode: screen;
+  animation-name: wait-led-particle-glow;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: opacity, transform;
+}
+
+@keyframes wait-led-particle-glow {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0) scale(0.85);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-18%) scale(1.15);
+  }
+}
+
+/* Wait slogan container — TipTap / ProseMirror carry the rainbow paint. */
+.wait-led-text {
+  display: block;
+  overflow: visible;
+  padding: 0.25em 0.35em;
+}
+
+/* TipTap wait slogans — same rainbow clip as the old static span. */
+.wait-led-text .led-rich-text,
+.wait-led-text .ProseMirror {
+  font-family: var(--font-body), sans-serif;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.35;
+  white-space: nowrap;
+  width: max-content;
+  max-width: none;
+  background-image: linear-gradient(
+    90deg,
+    #ff8fa3,
+    #ffc978,
+    #fff3a0,
+    #b8f0c0,
+    #9fe8ff,
+    #c5b4ff,
+    #f0b0ff,
+    #ff8fa3
+  );
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  caret-color: #fff3a0;
+  filter: drop-shadow(0 1px 8px rgb(0 0 0 / 0.4));
+  animation: wait-led-rainbow 10s ease-in-out infinite;
+  outline: none;
+}
+
+.wait-led-text .ProseMirror p {
+  margin: 0;
+  color: transparent !important;
+}
+
+.wait-led-text .ProseMirror strong {
+  font-weight: 800;
+}
+
+/* Employee VI/EN LEDs — white text like design mock (TipTap Color can override) */
+.employee-led-text .led-rich-text,
+.employee-led-text .ProseMirror {
+  font-family: var(--font-body), sans-serif;
+  font-weight: 600;
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.35);
+  width: 100%;
+  max-width: 100%;
+}
+
+.employee-led-text {
+  overflow: visible;
+  font-family: var(--font-body), sans-serif;
+  font-weight: 600;
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.35);
+}
+
+.employee-led-text .ProseMirror {
+  outline: none;
+  line-height: 1.25;
+  color: inherit;
+}
+
+.employee-led-text .ProseMirror p {
+  margin: 0;
+}
+
+/* TipTap strips inline font-size on <strong> — size MUST live in CSS. */
+.employee-led-text .ProseMirror strong {
+  font-size: 1.55em;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+@keyframes wait-led-rainbow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wait-led-text,
+  .wait-led-text .led-rich-text,
+  .wait-led-text .ProseMirror {
+    animation: none;
+    background-position: 40% 50%;
+  }
+}
+
+.ipad-gradient-btn {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(145deg, rgb(28 48 120 / 0.95) 0%, rgb(12 10 36 / 0.98) 100%)
+    padding-box,
+    linear-gradient(
+      90deg,
+      #00d4ff 0%,
+      #7b5cff 45%,
+      #e040fb 75%,
+      #00d4ff 100%
+    )
+    border-box;
+  box-shadow:
+    0 0 24px rgb(0 212 255 / 0.2),
+    0 0 48px rgb(224 64 251 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+.ipad-gradient-btn:hover:not(:disabled) {
+  box-shadow:
+    0 0 32px rgba(0, 212, 255, 0.28),
+    0 0 56px rgba(224, 64, 251, 0.2);
+}
+
+.ipad-gradient-box {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(rgb(10 8 30 / 0.74), rgb(10 8 30 / 0.74)) padding-box,
+    linear-gradient(
+      135deg,
+      #00d4ff 0%,
+      #a855f7 40%,
+      #ec4899 70%,
+      #00d4ff 100%
+    )
+    border-box;
+  box-shadow:
+    0 0 30px rgb(0 212 255 / 0.14),
+    inset 0 0 48px rgb(0 0 0 / 0.3);
+}
