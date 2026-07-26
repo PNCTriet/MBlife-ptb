@@ -63,6 +63,18 @@ type Interaction = {
   initialSlot: SharedLedSlot;
 };
 
+/**
+ * Wait slogans use fixed type sizes instead of the shared slot value: LED1/3
+ * carry the headline lines, LED2/4 the supporting ones. Employee reveal still
+ * uses `slot.fontSize`, so resizing there stays independent.
+ */
+const WAIT_FONT_SIZE_VW: Record<WaitLedId, number> = {
+  led1: 3.76,
+  led2: 2.56,
+  led3: 3.76,
+  led4: 2.56,
+};
+
 /** Soft glow dots over each LED strip — same layout on all 4. */
 const LED_PARTICLES = [
   { x: "5%", y: "40%", size: "2.5px", delay: "0.2s", duration: "4.4s" },
@@ -475,12 +487,12 @@ export default function WaitLedScene({ visible, onEditModeChange }: Props) {
                   </>
                 )}
                 <LedTextFitBox
-                  fitKey={`${copy[led.id]}|${item.fontSize}|${item.textWidth}|${item.textHeight}`}
+                  fitKey={`${copy[led.id]}|${WAIT_FONT_SIZE_VW[led.id]}|${item.textWidth}|${item.textHeight}`}
                 >
                   <LedRichTextEditor
                     html={copy[led.id]}
                     editable={editMode}
-                    fontSizeVw={item.fontSize}
+                    fontSizeVw={WAIT_FONT_SIZE_VW[led.id]}
                     onHtmlChange={(html) => updateCopy(led.id, html)}
                   />
                 </LedTextFitBox>
@@ -633,15 +645,9 @@ export default function WaitLedScene({ visible, onEditModeChange }: Props) {
           </div>
 
           <LedTextToolbar
-            fontSizeVw={selectedSlot.fontSize}
+            fontSizeVw={WAIT_FONT_SIZE_VW[selectedId]}
             align={selectedSlot.align}
             color={selectedSlot.color}
-            onFontSizeChange={(size) => {
-              updateSlot(selectedId, {
-                ...selectedSlot,
-                fontSize: size,
-              });
-            }}
             onAlignChange={(align: TextAlign) => {
               updateSlot(selectedId, {
                 ...selectedSlot,

@@ -165,7 +165,8 @@ type LedTextToolbarProps = {
   fontSizeVw: number;
   align: "left" | "center" | "right";
   color: string;
-  onFontSizeChange: (size: number) => void;
+  /** Omit when the scene renders a fixed size — hides the size stepper. */
+  onFontSizeChange?: (size: number) => void;
   onAlignChange: (align: "left" | "center" | "right") => void;
   onApplyAlignToHtml: (align: "left" | "center" | "right") => void;
   onColorChange: (color: string) => void;
@@ -249,23 +250,31 @@ export function LedTextToolbar({
       </div>
       <div className="flex items-center gap-2">
         <span className="text-xs text-white/45">Size</span>
-        <button
-          type="button"
-          className={btn}
-          onClick={() => onFontSizeChange(Math.max(0.8, fontSizeVw - 0.15))}
-        >
-          −
-        </button>
-        <span className="min-w-[3.5rem] text-center text-xs text-white/80">
-          {fontSizeVw.toFixed(2)}vw
-        </span>
-        <button
-          type="button"
-          className={btn}
-          onClick={() => onFontSizeChange(Math.min(6, fontSizeVw + 0.15))}
-        >
-          +
-        </button>
+        {onFontSizeChange ? (
+          <>
+            <button
+              type="button"
+              className={btn}
+              onClick={() => onFontSizeChange(Math.max(0.8, fontSizeVw - 0.15))}
+            >
+              −
+            </button>
+            <span className="min-w-[3.5rem] text-center text-xs text-white/80">
+              {fontSizeVw.toFixed(2)}vw
+            </span>
+            <button
+              type="button"
+              className={btn}
+              onClick={() => onFontSizeChange(Math.min(6, fontSizeVw + 0.15))}
+            >
+              +
+            </button>
+          </>
+        ) : (
+          <span className="text-xs text-white/80">
+            {fontSizeVw.toFixed(2)}vw (cố định)
+          </span>
+        )}
       </div>
     </div>
   );

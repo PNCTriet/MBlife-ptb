@@ -15,7 +15,12 @@ import {
   normalizeEmployeeCode,
   numericCodeKey,
 } from "@/lib/employees";
-import { createBrowserClient } from "@/lib/supabase/client";
+import {
+  createBrowserClient,
+  isTransientNetworkError,
+  networkErrorHint,
+  withNetworkRetry,
+} from "@/lib/supabase/client";
 import type { Employee, Honorific } from "@/lib/types";
 
 type EmployeeDraft = Omit<Employee, "id">;
@@ -40,7 +45,15 @@ function normalizedDraft(draft: EmployeeDraft): EmployeeDraft {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Lỗi không xác định";
+  return networkErrorHint(error);
+}
+
+/** Treat transport failures returned as PostgREST errors the same as throws. */
+function throwIfNetworkError(error: { message: string } | null): void {
+  if (!error) return;
+  if (isTransientNetworkError(new TypeError(error.message))) {
+    throw new TypeError(error.message);
+  }
 }
 
 export default function EmployeeAdminPage() {
@@ -61,51 +74,24 @@ export default function EmployeeAdminPage() {
   const loadEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, code, name, days, title, wish")
-        .order("code");
-
-      if (error) throw error;
-
-      const rows = (data as Employee[]) ?? [];
-
-      for (const row of rows) {
-        const nextCode = normalizeEmployeeCode(row.code);
-        if (nextCode === row.code) continue;
-
-        const conflict = rows.find(
-          (other) => other.id !== row.id && other.code === nextCode
-        );
-
-        if (conflict) {
-          // Keep the already-normalized row; drop the padded duplicate.
-          const { error: deleteError } = await supabase
-            .from("employees")
-            .delete()
-            .eq("id", row.id);
-          if (deleteError) throw deleteError;
-          continue;
-        }
-
-        const { error: updateError } = await supabase
+      // Read-only load. Do NOT mutate/normalize codes here — that used to fire
+      // hundreds of update/delete calls after every save and triggered Safari's
+      // intermittent "TypeError: Load failed" on the next CRUD click.
+      const rows = await withNetworkRetry(async () => {
+        const supabase = createBrowserClient();
+        const { data, error } = await supabase
           .from("employees")
-          .update({ code: nextCode })
-          .eq("id", row.id);
-        if (updateError) throw updateError;
-      }
-
-      const { data: refreshed, error: refreshError } = await supabase
-        .from("employees")
-        .select("id, code, name, days, title, wish")
-        .order("code");
-      if (refreshError) throw refreshError;
-      setEmployees((refreshed as Employee[]) ?? []);
+          .select("id, code, name, days, title, wish")
+          .order("code");
+        throwIfNetworkError(error);
+        if (error) throw error;
+        return (data as Employee[]) ?? [];
+      });
+      setEmployees(rows);
     } catch (error) {
       setFeedback({
         type: "error",
-        text: `Không tải được dữ liệu: ${errorMessage(error)}. Kiểm tra biến môi trường Supabase.`,
+        text: `Không tải được dữ liệu: ${errorMessage(error)}`,
       });
     }
     setLoading(false);
@@ -173,12 +159,15 @@ export default function EmployeeAdminPage() {
 
     let saveError: string | null = null;
     try {
-      const supabase = createBrowserClient();
-      const query = editingId
-        ? supabase.from("employees").update(payload).eq("id", editingId)
-        : supabase.from("employees").insert(payload);
-      const { error } = await query;
-      if (error) saveError = error.message;
+      await withNetworkRetry(async () => {
+        const supabase = createBrowserClient();
+        const query = editingId
+          ? supabase.from("employees").update(payload).eq("id", editingId)
+          : supabase.from("employees").insert(payload);
+        const { error } = await query;
+        throwIfNetworkError(error);
+        if (error) throw new Error(error.message);
+      });
     } catch (error) {
       saveError = errorMessage(error);
     }
@@ -186,7 +175,7 @@ export default function EmployeeAdminPage() {
     if (saveError) {
       setFeedback({
         type: "error",
-        text: `Không thể lưu: ${saveError}. Kiểm tra biến môi trường và migration CRUD.`,
+        text: `Không thể lưu: ${saveError}`,
       });
     } else {
       setFeedback({
@@ -210,12 +199,15 @@ export default function EmployeeAdminPage() {
     setFeedback(null);
     let deleteError: string | null = null;
     try {
-      const supabase = createBrowserClient();
-      const { error } = await supabase
-        .from("employees")
-        .delete()
-        .eq("id", employee.id);
-      if (error) deleteError = error.message;
+      await withNetworkRetry(async () => {
+        const supabase = createBrowserClient();
+        const { error } = await supabase
+          .from("employees")
+          .delete()
+          .eq("id", employee.id);
+        throwIfNetworkError(error);
+        if (error) throw new Error(error.message);
+      });
     } catch (error) {
       deleteError = errorMessage(error);
     }
@@ -272,14 +264,15 @@ export default function EmployeeAdminPage() {
     let importedCount = 0;
 
     try {
-      const supabase = createBrowserClient();
-      const { data: existingRows, error: loadError } = await supabase
-        .from("employees")
-        .select("id, code");
-
-      if (loadError) throw loadError;
-
-      const existing = (existingRows as Pick<Employee, "id" | "code">[]) ?? [];
+      const existing = await withNetworkRetry(async () => {
+        const supabase = createBrowserClient();
+        const { data: existingRows, error: loadError } = await supabase
+          .from("employees")
+          .select("id, code");
+        throwIfNetworkError(loadError);
+        if (loadError) throw loadError;
+        return (existingRows as Pick<Employee, "id" | "code">[]) ?? [];
+      });
 
       for (const row of validImportRows) {
         const code = normalizeEmployeeCode(row.code);
@@ -300,28 +293,28 @@ export default function EmployeeAdminPage() {
           wish: row.wish,
         };
 
-        if (match) {
-          const { error } = await supabase
-            .from("employees")
-            .update(payload)
-            .eq("id", match.id);
-          if (error) {
-            importError = error.message;
-            break;
+        await withNetworkRetry(async () => {
+          const supabase = createBrowserClient();
+          if (match) {
+            const { error } = await supabase
+              .from("employees")
+              .update(payload)
+              .eq("id", match.id);
+            throwIfNetworkError(error);
+            if (error) throw new Error(error.message);
+            match.code = code;
+            return;
           }
-          match.code = code;
-        } else {
+
           const { data, error } = await supabase
             .from("employees")
             .insert(payload)
             .select("id, code")
             .single();
-          if (error) {
-            importError = error.message;
-            break;
-          }
+          throwIfNetworkError(error);
+          if (error) throw new Error(error.message);
           if (data) existing.push(data as Pick<Employee, "id" | "code">);
-        }
+        });
 
         importedCount += 1;
       }
